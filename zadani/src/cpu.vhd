@@ -84,6 +84,8 @@ architecture behavioral of cpu is
     STATE_START,
     STATE_INIT,
     STATE_PTR_INIT,
+    STATE_FETCH,  
+    STATE_DECODE,
     STATE_NEXT,
     STATE_INC_PTR,          -- > 0x3E
     STATE_DEC_PTR,          -- < 0x3C
@@ -96,6 +98,7 @@ architecture behavioral of cpu is
     STATE_PUTCHAR,          -- . 0x2E
     STATE_GETCHAR,          -- , 0x2C
     STATE_CODE_DIVIDER,     -- @ 0x40
+    STATE_NOP,              -- No operation
     STATE_RETURN
   );
   signal state : fsm_state := STATE_START;
@@ -134,13 +137,21 @@ begin
       PTR <= (others => '0');
     elsif rising_edge(CLK) then -- Pri nabeznej hrane
       if PTR_INC = '1' then -- Signal na inkrementaciu - inkrementuje sa PTR
-        PTR <= PTR + 1;
+        if PTR = "111111111111" then -- Pri preteceni sa nastavi na same 0
+          PTR <= (others => '0');
+        else
+          PTR <= PTR + 1;
+        end if;
       elsif PTR_DEC = '1' then -- Signal na dekrementaciu - dekrementuje sa PTR
-        PTR <= PTR - 1;
+        if PTR = "000000000000" then -- Pri preteceni smerom dole, nastavi sa na same 1
+          PTR <= (others => '1');
+        else
+          PTR <= PTR - 1;
+        end if;
       end if;
     end if;
-  end process;
-  -- END PTR
+    end process;
+    -- END PTR
 
   -- PC
   process(CLK)
@@ -272,6 +283,45 @@ begin
           PTR_INC <= '1';
           next_state <= STATE_INIT;
         end if; 
+      -- when STATE_FETCH =>
+      --     if EN = '1' then -- When fsm gets EN signal, fetch instruciton
+      --       MX1_SEL <= '1'; -- Set multiplexor PC - > DATA_ADDR
+      --       DATA_RDWR <= '1'; -- Read from memory
+      --       next_state <= STATE_DECODE; -- Go to decode instruction
+      --     else
+      --       next_state <= STATE_START; -- If there is no instruction go to start
+      --     end if;
+      -- when STATE_DECODE =>
+      --   case DATA_RDATA is -- DEC - 1 doesn't work, therefore i am using DATA_RDATA
+      --     when x"3E" =>
+      --       next_state <= STATE_INC_PTR; -- Increment pointer >
+      --     when x"3C" =>
+      --       next_state <= STATE_DEC_PTR; -- Decrement pointer <
+      --     when x"2B" =>
+      --       next_state <= STATE_INC_PTR_VAL; -- Increment pointer value +
+      --     when x"2D" =>
+      --       next_state <= STATE_DEC_PTR_VAL; -- Decrement pointer value -
+      --     when x"5B" =>
+      --       next_state <= STATE_CNT_START_WHILE; -- Start while [
+      --     when x"5D" =>
+      --       next_state <= STATE_CNT_END_WHILE; -- End while ]
+      --     when x"24" =>
+      --       next_state <= STATE_SAVE_PTR_TO_TMP; -- Save ptr to tmp $
+      --     when x"21" =>
+      --       next_state <= STATE_LOAD_TMP_TO_PTR; -- Load tmp to ptr !
+      --     when x"2E" =>
+      --       next_state <= STATE_PUTCHAR; -- Putchar .
+      --     when x"2C" =>
+      --       next_state <= STATE_GETCHAR; -- Getchar ,
+      --     when x"40" =>
+      --       next_state <= STATE_CODE_DIVIDER; -- Code divider @
+      --     when others =>
+      --       next_state <= STATE_NOP; -- No operation
+      --   end case;
+      -- when STATE_INC_PTR =>
+      --   PTR_INC <= '1';
+      --   PC_INC <= '1';
+      --   next_state <= STATE_FETCH; 
       when STATE_RETURN =>
         DONE <= '1';
         next_state <= STATE_RETURN;
