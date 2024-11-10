@@ -78,7 +78,7 @@ architecture behavioral of cpu is
 
 -- FSM
   type fsm_state is (
-    STATE_INIT,
+    STATE_START,
     STATE_SAVE_PTR_TO_TMP,
     STATE_SAVE_TMP_TO_PTR,
     STATE_CNT_INC,
@@ -96,7 +96,7 @@ architecture behavioral of cpu is
     STATE_GETCHAR_PTR,
     STATE_RETURN
   );
-  signal state : fsm_state := START_STATE;
+  signal state : fsm_state := STATE_START;
   signal next_state : fsm_state;
 
 begin
@@ -184,7 +184,7 @@ begin
   -- END MX2
   
   
-  -- FSM START
+  -- FSM SETUP
   process(CLK, RESET, EN)
   begin
     if RESET = '1' then
@@ -197,8 +197,22 @@ begin
   end process;
   -- FSM END
 
-  
+  -- FSM LOGIC
+  process(state, PTR, PC, DATA_RDATA, IN_DATA, OUT_BUSY, IS_ZERO)
+  begin
+    -- Hodnoty std_logic boli inicializovane na '0' a std_logic_vector na (others => '0') v deklaracii
+    -- Initialize signals
+    DATA_EN <= '0';
+    DATA_RDWR <= '0';
+    IN_REQ <= '0';
+    OUT_INV <= '0';
+    OUT_WE <= '0';
+    READY <= '0';
+    DONE <= '0';
+    
 
+  end process;
+  -- FSM END
 
 end behavioral;
 
