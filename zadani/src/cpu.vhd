@@ -48,52 +48,54 @@ end cpu;
 architecture behavioral of cpu is
 
 -- CNT
-  signal CNT : std_logic_vector(12 downto 0) := (others => '0');
-  signal CNT_INC : std_logic := '0';
-  signal CNT_DEC : std_logic := '0';
+  signal CNT : std_logic_vector(12 downto 0);
+  signal CNT_INC : std_logic;
+  signal CNT_DEC : std_logic;
 
 -- TMP
-  signal TMP : std_logic_vector(12 downto 0) := (others => '0');
-  signal TMP_LD : std_logic := '0';
+  signal TMP : std_logic_vector(7 downto 0);
+  signal TMP_LD : std_logic;
 
 -- PTR
-  signal PTR : std_logic_vector(12 downto 0) := (others => '0');
-  signal PTR_INC : std_logic := '0';
-  signal PTR_DEC : std_logic := '0';
-  signal PRT_RST : std_logic := '0';
+  signal PTR : std_logic_vector(12 downto 0);
+  signal PTR_INC : std_logic;
+  signal PTR_DEC : std_logic;
+  signal PTR_RST : std_logic;
 
 -- PC
-  signal PC : std_logic_vector(12 downto 0) := (others => '0');
-  signal PC_INC : std_logic := '0';
-  signal PC_DEC : std_logic := '0';
+  signal PC : std_logic_vector(12 downto 0);
+  signal PC_INC : std_logic;
+  signal PC_DEC : std_logic;
 
 -- MX1
-  signal MX1_SEL : std_logic := '0';
+  signal MX1_SEL : std_logic;
 
 -- MX2
-  signal MX2_SEL : std_logic_vector(1 downto 0) := (others => '0');
+  signal MX2_SEL : std_logic_vector(1 downto 0);
 
 -- IS_ZERO
-  signal IS_ZERO : std_logic := '0';
+  signal IS_ZERO : std_logic;
+
+-- DEC
+  signal DEC : std_logic_vector(7 downto 0);
 
 -- FSM
   type fsm_state is (
     STATE_START,
-    STATE_SAVE_PTR_TO_TMP,
-    STATE_SAVE_TMP_TO_PTR,
-    STATE_CNT_INC,
-    STATE_CNT_DEC,
-    STATE_TMP_LD,
-    STATE_PTR_INC,
-    STATE_PTR_DEC,
-    STATE_PTR_RST,
-    STATE_PC_INC,
-    STATE_PC_DEC,
-    STATE_MX1_SEL,
-    STATE_MX2_SEL,
-    STATE_WHILE_PTR,
-    STATE_PUTCHAR_PTR,
-    STATE_GETCHAR_PTR,
+    STATE_INIT,
+    STATE_PTR_INIT,
+    STATE_NEXT,
+    STATE_INC_PTR,          -- > 0x3E
+    STATE_DEC_PTR,          -- < 0x3C
+    STATE_INC_PTR_VAL,      -- + 0x2B
+    STATE_DEC_PTR_VAL,      -- - 0x2D 
+    STATE_CNT_START_WHILE,  -- [ 0x5B
+    STATE_CNT_END_WHILE,    -- ] 0x5D
+    STATE_SAVE_PTR_TO_TMP,  -- $ 0x24
+    STATE_LOAD_TMP_TO_PTR,  -- ! 0x21
+    STATE_PUTCHAR,          -- . 0x2E
+    STATE_GETCHAR,          -- , 0x2C
+    STATE_CODE_DIVIDER,     -- @ 0x40
     STATE_RETURN
   );
   signal state : fsm_state := STATE_START;
@@ -102,7 +104,7 @@ architecture behavioral of cpu is
 begin
 
   -- CNT
-  process(CLK, RESET)
+  process(CLK)
   begin
     if rising_edge(CLK) then -- Pri nabeznej hrane
       if CNT_INC = '1' then -- Signal na inkrementaciu - inkrementuje sa CNT
@@ -115,7 +117,7 @@ begin
   -- END CNT
 
   -- TMP
-  process(CLK, RESET)
+  process(CLK)
   begin
     if rising_edge(CLK) then -- Pri nabeznej hrane
       if TMP_LD = '1' then -- Signal na load - nacita sa hodnota z DATA_RDATA do TMP
@@ -126,9 +128,9 @@ begin
   -- END TMP
 
   -- PTR
-  process(CLK, RESET)
+  process(CLK, PTR_RST)
   begin
-    if PRT_RST = '1' then -- Ak pride reset, tak sa nastavi vsetko na 0
+    if PTR_RST = '1' then -- Ak pride reset, tak sa nastavi vsetko na 0
       PTR <= (others => '0');
     elsif rising_edge(CLK) then -- Pri nabeznej hrane
       if PTR_INC = '1' then -- Signal na inkrementaciu - inkrementuje sa PTR
@@ -141,7 +143,7 @@ begin
   -- END PTR
 
   -- PC
-  process(CLK, RESET)
+  process(CLK)
   begin
     if rising_edge(CLK) then -- Pri nabeznej hrane
       if PC_INC = '1' then -- Signal na inkrementaciu - inktrementuje sa PC
@@ -154,63 +156,127 @@ begin
   -- END PC
 
   -- MX1
-  process(CLK, RESET)
+  process(CLK, MX1_SEL, PTR, PC)
   begin
-    if rising_edge(CLK) then -- Pri nabeznej hrane
-      if MX1_SEL = '0' then -- Ak je selektor na nule, tak cez MX1 prejde hodnota z PTR
-        DATA_ADDR <= PTR;
-      else -- if MX1_SEL = '1' then Na selektore je jedna, cez MX1 prejde hodnota z PC
-        DATA_ADDR <= PC;
-      end if;
+    if MX1_SEL = '0' then -- Ak je selektor na nule, tak cez MX1 prejde hodnota z PTR
+      DATA_ADDR <= PTR;
+    else -- if MX1_SEL = '1' then Na selektore je jedna, cez MX1 prejde hodnota z PC
+      DATA_ADDR <= PC;
     end if;
   end process;
   -- END MX1
 
   -- MX2
-  process(CLK, RESET)
+  process(CLK, MX2_SEL, IN_DATA, TMP, DATA_RDATA)
   begin
-    if rising_edge(CLK) then -- Pri nabeznej hrane
-      if MX2_SEL = "00" then -- Ak je selektor na nule, tak prejde TMP
-        DATA_WDATA <= IN_DATA;
-      elsif MX2_SEL = "01" then -- Ak je selektor jedna, prejde TMP
-        DATA_WDATA <= TMP;
-      elsif MX2_SEL = "10" then -- Ak je selektor jedna, prejde DATA_RDATA -1
-        DATA_WDATA <= DATA_RDATA - 1;
-     else -- if MX2_SEL = "11" then Ak je selektor dva, prejde DATA_RDATA + 1
-        DATA_WDATA <= DATA_RDATA + 1;
-      end if;
+    if MX2_SEL = "00" then -- Ak je selektor na nule, tak prejde TMP
+      DATA_WDATA <= IN_DATA;
+    elsif MX2_SEL = "01" then -- Ak je selektor jedna, prejde TMP
+      DATA_WDATA <= TMP;
+    elsif MX2_SEL = "10" then -- Ak je selektor jedna, prejde DATA_RDATA -1
+      DATA_WDATA <= DATA_RDATA - 1;
+    else -- if MX2_SEL = "11" then Ak je selektor dva, prejde DATA_RDATA + 1
+      DATA_WDATA <= DATA_RDATA + 1;
     end if;
   end process;
   -- END MX2
+ 
+  -- -- MX1
+  -- DATA_ADDR <= PTR when MX1_SEL = '0' else PC;
+  -- -- END MX1
+
+  -- -- MX2
+  -- DATA_WDATA <= IN_DATA when MX2_SEL = "00" else
+  --               TMP when MX2_SEL = "01" else
+  --               DATA_RDATA - 1 when MX2_SEL = "10" else
+  --               DATA_RDATA + 1;
   
+  -- IS_ZERO
+  IS_ZERO <= '1' when CNT = 0 else '0';  -- Is zero logic
+  -- END IS_ZERO
+
+  -- DEC
+  DEC <= DATA_RDATA - 1; -- Decrement logic
+  -- END DEC
+
+  -- I/O
+  OUT_DATA <= DATA_RDATA; -- Connected as shown in the diagram
   
   -- FSM SETUP
   process(CLK, RESET, EN)
   begin
     if RESET = '1' then
-      state <= STATE_START;
+      state <= STATE_START; -- Reset fsm
     elsif rising_edge(CLK) then
       if EN = '1' then
-        state <= NEXT_STATE;
+        state <= next_state; -- Go to next state on rising edge if fsm is enabled
       end if;
     end if;
   end process;
   -- FSM END
 
   -- FSM LOGIC
-  process(state, PTR, PC, DATA_RDATA, IN_DATA, OUT_BUSY, IS_ZERO)
+  process(state, DEC)
   begin
-    -- Hodnoty std_logic boli inicializovane na '0' a std_logic_vector na (others => '0') v deklaracii
-    -- Initialize signals
-    DATA_EN <= '0';
-    DATA_RDWR <= '0';
-    IN_REQ <= '0';
-    OUT_INV <= '0';
-    OUT_WE <= '0';
-    READY <= '0';
-    DONE <= '0';
-    
+    --  next_state <= STATE_START;    
 
+    -- Initialize all the signals that fsm controls
+
+    -- CNT <= (others => '0');
+    CNT_INC <= '0';
+    CNT_DEC <= '0';
+
+    -- TMP <= (others => '0');
+    TMP_LD <= '0';
+
+    -- PTR <= (others => '0');
+    PTR_INC <= '0';
+    PTR_DEC <= '0';
+    PTR_RST <= '0';
+
+    -- PC <= (others => '0');
+    PC_INC <= '0';
+    PC_DEC <= '0';
+
+    MX1_SEL <= '0';
+    MX2_SEL <= "00";
+
+    DATA_RDWR <= '0';
+    DATA_EN <= '0';
+    -- READY <= '0';
+    -- DONE <= '0';
+
+    IN_REQ <= '0';
+    OUT_WE <= '0';
+    OUT_INV <= '0';
+
+    case state is
+      when STATE_START => -- Start state PC ←0, PTR ←0, CNT ←0, READY ←0, DONE ←0
+        CNT <= (others => '0');
+        -- PTR <= (others => '0'); -- PTR_RST reset it to zeros
+        PC <= (others => '0');
+
+        PTR_RST <= '1';
+        READY <= '0';
+        DONE <= '0';
+        next_state <= STATE_INIT; -- Go to init state
+      when STATE_INIT => -- Init state PTR ←x + 1, READY ←1 (mem[x] = '@' nutne vymyslet
+        MX1_SEL <= '0';
+        DATA_RDWR <= '1';
+        DATA_EN <= '1';
+        if DEC + 1 = x"40" then -- When there is @ in the memory, its one less in DEC
+          READY <= '1';
+          PTR_INC <= '1';
+          next_state <= STATE_RETURN;
+        else
+          PTR_INC <= '1';
+          next_state <= STATE_INIT;
+        end if; 
+      when STATE_RETURN =>
+        DONE <= '1';
+        next_state <= STATE_RETURN;
+      when others => null;
+    end case;
   end process;
   -- FSM END
 
