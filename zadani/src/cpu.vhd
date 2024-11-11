@@ -76,7 +76,7 @@ architecture behavioral of cpu is
   signal IS_ZERO : std_logic;
 
 -- DEC
-  -- signal DEC : std_logic_vector(7 downto 0);
+  signal DEC : std_logic_vector(7 downto 0);
 
 -- FSM
   type fsm_state is (
@@ -93,8 +93,12 @@ architecture behavioral of cpu is
     STATE_INC_PTR_VAL_WRITE,
     STATE_DEC_PTR_VAL_READ, -- - 0x2D 
     STATE_DEC_PTR_VAL_WRITE,
-    STATE_CNT_START_WHILE,  -- [ 0x5B
-    STATE_CNT_END_WHILE,    -- ] 0x5D
+    STATE_START_WHILE,  -- [ 0x5B
+    STATE_START_WHILE_CMP,
+    STATE_START_FIND_END,
+    STATE_START_FIND_END_CMP,
+    STATE_END_WHILE,    -- ] 0x5D
+    STATE_END_FIND_START,
     STATE_SAVE_PTR_TO_TMP,  -- $ 0x24
     STATE_SAVE_PTR_TO_TMP_WRITE,
     STATE_LOAD_TMP_TO_PTR,  -- ! 0x21
@@ -206,12 +210,6 @@ begin
   IS_ZERO <= '1' when CNT = 0 else '0';  -- Is zero logic
   -- END IS_ZERO
 
-  -- DEC
-  -- DEC <= DATA_RDATA;  -- DEC is DATA_RDATA (decode)
-  -- END DEC
-
-  -- I/O
-  OUT_DATA <= DATA_RDATA; -- Connected as shown in the diagram
   
   -- FSM SETUP
   process(CLK, RESET, EN)
@@ -227,7 +225,7 @@ begin
   -- FSM END
 
   -- FSM LOGIC
-  process(state, DATA_RDATA, IS_ZERO, EN, OUT_BUSY, IN_VLD)
+  process(state, DEC, DATA_RDATA, IS_ZERO, EN, OUT_BUSY, IN_VLD)
   begin
     next_state <= STATE_START;    
 
@@ -253,6 +251,10 @@ begin
     OUT_WE <= '0';
     OUT_INV <= '0';
 
+    DEC <= DATA_RDATA;
+
+    OUT_DATA <= DATA_RDATA;
+
     case state is
       when STATE_START => -- Start state PC ←0, PTR ←0, CNT ←0, READY ←0, DONE ←0
 
@@ -267,7 +269,7 @@ begin
         next_state <= STATE_INIT_CMP;
 
       WHEN STATE_INIT_CMP =>
-        if DATA_RDATA = x"40" then -- When there is @ in the memory
+        if DEC = x"40" then -- When there is @ in the memory
           READY <= '1';
           PTR_INC <= '1';
           next_state <= STATE_FETCH; -- Go to fetch instruction
@@ -287,7 +289,7 @@ begin
           end if;
 
       when STATE_DECODE =>
-        case DATA_RDATA is -- Decode value
+        case DEC is -- Decode value
           when x"3E" =>
             next_state <= STATE_INC_PTR; -- Increment pointer >
           when x"3C" =>
@@ -297,9 +299,9 @@ begin
           when x"2D" =>
             next_state <= STATE_DEC_PTR_VAL_READ; -- Decrement pointer value -
           when x"5B" =>
-            next_state <= STATE_CNT_START_WHILE; -- Start while [
+            next_state <= STATE_START_WHILE; -- Start while [
           when x"5D" =>
-            next_state <= STATE_CNT_END_WHILE; -- End while ]
+            next_state <= STATE_END_WHILE; -- End while ]
           when x"24" =>
             next_state <= STATE_SAVE_PTR_TO_TMP; -- Save ptr to tmp $
           when x"21" =>
@@ -362,7 +364,7 @@ begin
       when STATE_PUTCHAR_PRINT => -- Putchar print
         if OUT_BUSY = '0' then -- If output is not busy
           OUT_WE <= '1'; -- Enable output
-          OUT_DATA <= DATA_RDATA; -- Write data to output
+          -- OUT_DATA <= DATA_RDATA; -- Write data to output ( DATA_RDATA is always connected to OUT_DATA therefore i commented this line )
           next_state <= STATE_FETCH;
         else
           next_state <= STATE_PUTCHAR_PRINT;
@@ -401,6 +403,49 @@ begin
         DATA_EN <= '1';
         PC_INC <= '1'; -- Increment PC
         next_state <= STATE_FETCH;
+
+      when STATE_START_WHILE =>
+        MX1_SEL <= '0'; -- Set multiplexor PTR -> DATA_ADDR
+        DATA_RDWR <= '1'; -- Prepare to read from memory
+        DATA_EN <= '1';
+        next_state <= STATE_START_WHILE_CMP;
+
+      when STATE_START_WHILE_CMP =>
+        if DEC = x"00" then -- Go to the end if PTR is zero
+          next_state <= STATE_START_FIND_END;
+        else
+          PC_INC <= '1'; -- Increment PC
+          next_state <= STATE_FETCH;
+        end if;
+
+      when STATE_START_FIND_END =>
+        MX1_SEL <= '1'; -- Set multiplexor PC -> DATA_ADDR
+        DATA_RDWR <= '1'; -- Prepare to read from memory
+        DATA_EN <= '1';
+        next_state <= STATE_START_FIND_END_CMP;
+        
+      when STATE_START_FIND_END_CMP =>
+        if DEC = x"5D" then -- If the end is found
+          PC_INC <= '1'; -- Increment PC
+          next_state <= STATE_FETCH;
+        else
+          PC_INC <= '1'; -- Increment PC
+          next_state <= STATE_START_FIND_END;
+        end if;
+
+      when STATE_END_WHILE =>
+        MX1_SEL <= '1'; -- Set multiplexor PC -> DATA_ADDR
+        DATA_RDWR <= '1'; -- Prepare to read from memory
+        DATA_EN <= '1';
+        next_state <= STATE_END_FIND_START;
+
+      when STATE_END_FIND_START =>
+        if DEC = x"5B" then -- If the start is found
+          next_state <= STATE_FETCH;
+        else
+          PC_DEC <= '1'; -- Increment PC
+          next_state <= STATE_END_WHILE;
+        end if;
 
       when STATE_CODE_DIVIDER => -- Code divider
         DONE <= '1'; -- Done
