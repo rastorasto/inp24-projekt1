@@ -1,15 +1,15 @@
 <testsuites name="results">
   <testsuite name="all" package="all">
-    <property name="random_seed" value="1731336812" />
-    <testcase name="test_reset" classname="cpu" file="/homes/eva/xu/xuhliar00/inp24-projekt1/zadani/test/scripts/cpu_lib.py" lineno="10" time="0.004583120346069336" sim_time_ns="51.000001" ratio_time="11127.790053285335" />
-    <testcase name="test_init" classname="cpu" file="/homes/eva/xu/xuhliar00/inp24-projekt1/zadani/test/scripts/cpu_lib.py" lineno="26" time="0.012781381607055664" sim_time_ns="110.000001" ratio_time="8606.268428702344" />
-    <testcase name="test_increment" classname="cpu" file="/homes/eva/xu/xuhliar00/inp24-projekt1/zadani/test/scripts/cpu_lib.py" lineno="33" time="0.023927688598632812" sim_time_ns="290.000001" ratio_time="12119.850181290394" />
-    <testcase name="test_decrement" classname="cpu" file="/homes/eva/xu/xuhliar00/inp24-projekt1/zadani/test/scripts/cpu_lib.py" lineno="42" time="0.024163007736206055" sim_time_ns="290.000001" ratio_time="12001.817164734071" />
-    <testcase name="test_move" classname="cpu" file="/homes/eva/xu/xuhliar00/inp24-projekt1/zadani/test/scripts/cpu_lib.py" lineno="50" time="0.019470691680908203" sim_time_ns="220.000001" ratio_time="11299.033676123527" />
-    <testcase name="test_print" classname="cpu" file="/homes/eva/xu/xuhliar00/inp24-projekt1/zadani/test/scripts/cpu_lib.py" lineno="58" time="0.07431650161743164" sim_time_ns="1230.0000010000003" ratio_time="16550.83291368888" />
-    <testcase name="test_input" classname="cpu" file="/homes/eva/xu/xuhliar00/inp24-projekt1/zadani/test/scripts/cpu_lib.py" lineno="64" time="0.17394638061523438" sim_time_ns="2520.0000009999994" ratio_time="14487.222971164803" />
-    <testcase name="test_while_loop" classname="cpu" file="/homes/eva/xu/xuhliar00/inp24-projekt1/zadani/test/scripts/cpu_lib.py" lineno="74" time="0.098419189453125" sim_time_ns="1550.0000010000003" ratio_time="15748.961250470702" />
-    <testcase name="test_tmp" classname="cpu" file="/homes/eva/xu/xuhliar00/inp24-projekt1/zadani/test/scripts/cpu_lib.py" lineno="82" time="0.03350186347961426" sim_time_ns="400.00000100000034" ratio_time="11939.634380141231" />
-    <testcase name="test_login_xuhliar00" classname="cpu" file="&lt;makefun-gen-1&gt;" lineno="1" time="0.27934741973876953" sim_time_ns="4810.000000999999" ratio_time="17218.702093250224" />
+    <property name="random_seed" value="1731339233" />
+    <testcase name="test_reset" classname="cpu" file="/homes/eva/xu/xuhliar00/inp24-projekt1/zadani/test/scripts/cpu_lib.py" lineno="10" time="0.003264188766479492" sim_time_ns="51.000001" ratio_time="15624.096720057263" />
+    <testcase name="test_init" classname="cpu" file="/homes/eva/xu/xuhliar00/inp24-projekt1/zadani/test/scripts/cpu_lib.py" lineno="26" time="0.008106231689453125" sim_time_ns="110.000001" ratio_time="13569.807182185412" />
+    <testcase name="test_increment" classname="cpu" file="/homes/eva/xu/xuhliar00/inp24-projekt1/zadani/test/scripts/cpu_lib.py" lineno="33" time="0.015791893005371094" sim_time_ns="290.000001" ratio_time="18363.85295299088" />
+    <testcase name="test_decrement" classname="cpu" file="/homes/eva/xu/xuhliar00/inp24-projekt1/zadani/test/scripts/cpu_lib.py" lineno="42" time="0.016442298889160156" sim_time_ns="290.000001" ratio_time="17637.436404418306" />
+    <testcase name="test_move" classname="cpu" file="/homes/eva/xu/xuhliar00/inp24-projekt1/zadani/test/scripts/cpu_lib.py" lineno="50" time="0.013501882553100586" sim_time_ns="220.000001" ratio_time="16294.02419512818" />
+    <testcase name="test_print" classname="cpu" file="/homes/eva/xu/xuhliar00/inp24-projekt1/zadani/test/scripts/cpu_lib.py" lineno="58" time="0.04582571983337402" sim_time_ns="1230.0000010000003" ratio_time="26840.822260345903" />
+    <testcase name="test_input" classname="cpu" file="/homes/eva/xu/xuhliar00/inp24-projekt1/zadani/test/scripts/cpu_lib.py" lineno="64" time="0.10861730575561523" sim_time_ns="2520.0000009999994" ratio_time="23200.72278969893" />
+    <testcase name="test_while_loop" classname="cpu" file="/homes/eva/xu/xuhliar00/inp24-projekt1/zadani/test/scripts/cpu_lib.py" lineno="74" time="0.05998420715332031" sim_time_ns="1550.0000010000003" ratio_time="25840.134838128022" />
+    <testcase name="test_tmp" classname="cpu" file="/homes/eva/xu/xuhliar00/inp24-projekt1/zadani/test/scripts/cpu_lib.py" lineno="82" time="0.019989728927612305" sim_time_ns="400.00000100000034" ratio_time="20010.27639987006" />
+    <testcase name="test_login_xuhliar00" classname="cpu" file="&lt;makefun-gen-1&gt;" lineno="1" time="0.2010197639465332" sim_time_ns="4810.000000999999" ratio_time="23927.99546953678" />
   </testsuite>
 </testsuites>

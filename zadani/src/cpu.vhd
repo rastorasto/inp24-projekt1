@@ -105,7 +105,7 @@ architecture behavioral of cpu is
     STATE_PUTCHAR_PRINT,    
     STATE_GETCHAR,          -- , 0x2C
     STATE_GETCHAR_READ,     
-    STATE_CODE_DIVIDER,     -- @ 0x40
+    STATE_HALT,     -- @ 0x40
     STATE_NOP               -- No operation
   );
   signal state : fsm_state := STATE_START;
@@ -309,7 +309,7 @@ begin
           when x"2C" =>
             next_state <= STATE_GETCHAR; -- Getchar ,
           when x"40" =>
-            next_state <= STATE_CODE_DIVIDER; -- Code divider @
+            next_state <= STATE_HALT; -- Code divider @
           when others =>
             next_state <= STATE_NOP; -- No operation
         end case;
@@ -390,7 +390,7 @@ begin
         DATA_EN <= '1';
         PC_INC <= '1'; -- Increment PC
         next_state <= STATE_SAVE_PTR_TO_TMP_WRITE;
-        
+
       when STATE_SAVE_PTR_TO_TMP_WRITE =>
         TMP_LD <= '1'; -- Load TMP
         next_state <= STATE_FETCH;
@@ -446,9 +446,9 @@ begin
           next_state <= STATE_END_WHILE;
         end if;
 
-      when STATE_CODE_DIVIDER => -- Code divider
+      when STATE_HALT => -- Code divider
         DONE <= '1'; -- Done
-        next_state <= STATE_CODE_DIVIDER;
+        next_state <= STATE_HALT;
 
       when STATE_NOP => -- No operation
         PC_INC <= '1'; -- Increment PC
