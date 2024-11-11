@@ -1,7 +1,7 @@
 -- cpu.vhd: Simple 8-bit CPU (BrainFuck interpreter)
 -- Copyright (C) 2024 Brno University of Technology,
 --                    Faculty of Information Technology
--- Author(s): jmeno <login AT stud.fit.vutbr.cz>
+-- Author(s): Rastislav Uhliar xuhliar00@stud.fit.vutbr.cz
 --
 library ieee;
 use ieee.std_logic_1164.all;
@@ -48,22 +48,21 @@ end cpu;
 architecture behavioral of cpu is
 
 -- CNT
-  signal CNT : std_logic_vector(12 downto 0);
+  signal CNT : std_logic_vector(12 downto 0) := (others => '0');
   signal CNT_INC : std_logic;
   signal CNT_DEC : std_logic;
 
 -- TMP
-  signal TMP : std_logic_vector(7 downto 0);
+  signal TMP : std_logic_vector(7 downto 0) := (others => '0');
   signal TMP_LD : std_logic;
 
 -- PTR
-  signal PTR : std_logic_vector(12 downto 0);
+  signal PTR : std_logic_vector(12 downto 0) := (others => '0');
   signal PTR_INC : std_logic;
   signal PTR_DEC : std_logic;
-  signal PTR_RST : std_logic;
 
 -- PC
-  signal PC : std_logic_vector(12 downto 0);
+  signal PC : std_logic_vector(12 downto 0) := (others => '0');
   signal PC_INC : std_logic;
   signal PC_DEC : std_logic;
 
@@ -77,29 +76,34 @@ architecture behavioral of cpu is
   signal IS_ZERO : std_logic;
 
 -- DEC
-  signal DEC : std_logic_vector(7 downto 0);
+  -- signal DEC : std_logic_vector(7 downto 0);
 
 -- FSM
   type fsm_state is (
     STATE_START,
     STATE_INIT,
+    STATE_INIT_CMP,
     STATE_PTR_INIT,
     STATE_FETCH,  
     STATE_DECODE,
     STATE_NEXT,
     STATE_INC_PTR,          -- > 0x3E
     STATE_DEC_PTR,          -- < 0x3C
-    STATE_INC_PTR_VAL,      -- + 0x2B
-    STATE_DEC_PTR_VAL,      -- - 0x2D 
+    STATE_INC_PTR_VAL_READ, -- + 0x2B
+    STATE_INC_PTR_VAL_WRITE,
+    STATE_DEC_PTR_VAL_READ, -- - 0x2D 
+    STATE_DEC_PTR_VAL_WRITE,
     STATE_CNT_START_WHILE,  -- [ 0x5B
     STATE_CNT_END_WHILE,    -- ] 0x5D
     STATE_SAVE_PTR_TO_TMP,  -- $ 0x24
+    STATE_SAVE_PTR_TO_TMP_WRITE,
     STATE_LOAD_TMP_TO_PTR,  -- ! 0x21
     STATE_PUTCHAR,          -- . 0x2E
+    STATE_PUTCHAR_PRINT,    
     STATE_GETCHAR,          -- , 0x2C
+    STATE_GETCHAR_READ,     
     STATE_CODE_DIVIDER,     -- @ 0x40
-    STATE_NOP,              -- No operation
-    STATE_RETURN
+    STATE_NOP               -- No operation
   );
   signal state : fsm_state := STATE_START;
   signal next_state : fsm_state;
@@ -107,12 +111,14 @@ architecture behavioral of cpu is
 begin
 
   -- CNT
-  process(CLK)
+  process(CLK, RESET)
   begin
-    if rising_edge(CLK) then -- Pri nabeznej hrane
-      if CNT_INC = '1' then -- Signal na inkrementaciu - inkrementuje sa CNT
+    if RESET = '1' then -- When reset signal comes, set everything to 0
+      CNT <= (others => '0');
+    elsif rising_edge(CLK) then -- At rising edge
+      if CNT_INC = '1' then -- Increment signal - CNT gets incremented
         CNT <= CNT + 1;
-      elsif CNT_DEC = '1' then -- Signal na dekrementaciu - dekrementuje sa CNT
+      elsif CNT_DEC = '1' then -- Decrement signal - CNT gets decremented
         CNT <= CNT - 1;
       end if;
     end if;
@@ -120,10 +126,12 @@ begin
   -- END CNT
 
   -- TMP
-  process(CLK)
+  process(CLK, RESET)
   begin
-    if rising_edge(CLK) then -- Pri nabeznej hrane
-      if TMP_LD = '1' then -- Signal na load - nacita sa hodnota z DATA_RDATA do TMP
+    if RESET = '1' then -- When reset signal comes, set everything to 0
+      TMP <= (others => '0');
+    elsif rising_edge(CLK) then -- At rising edge
+      if TMP_LD = '1' then -- Load signal - Get data from DATA_RDATA to TMP
         TMP <= DATA_RDATA;
       end if;
     end if;
@@ -131,35 +139,37 @@ begin
   -- END TMP
 
   -- PTR
-  process(CLK, PTR_RST)
+  process(CLK, RESET)
   begin
-    if PTR_RST = '1' then -- Ak pride reset, tak sa nastavi vsetko na 0
+    if RESET = '1' then -- When reset signal comes, set everything to 0
       PTR <= (others => '0');
-    elsif rising_edge(CLK) then -- Pri nabeznej hrane
-      if PTR_INC = '1' then -- Signal na inkrementaciu - inkrementuje sa PTR
-        if PTR = "111111111111" then -- Pri preteceni sa nastavi na same 0
+    elsif rising_edge(CLK) then -- At rising edge
+      if PTR_INC = '1' then -- Increment signal - PTR gets incremented
+        if PTR = "1111111111111" then -- On overflow, set to all 0s
           PTR <= (others => '0');
         else
           PTR <= PTR + 1;
         end if;
-      elsif PTR_DEC = '1' then -- Signal na dekrementaciu - dekrementuje sa PTR
-        if PTR = "000000000000" then -- Pri preteceni smerom dole, nastavi sa na same 1
+      elsif PTR_DEC = '1' then -- Decrement signal - PTR gets decremented
+        if PTR = "0000000000000" then -- On underflow, set to all 1s
           PTR <= (others => '1');
         else
           PTR <= PTR - 1;
         end if;
       end if;
     end if;
-    end process;
+  end process;
     -- END PTR
 
   -- PC
-  process(CLK)
+  process(CLK, RESET)
   begin
-    if rising_edge(CLK) then -- Pri nabeznej hrane
-      if PC_INC = '1' then -- Signal na inkrementaciu - inktrementuje sa PC
+    if RESET = '1' then -- When reset signal comes, set everything to 0
+      PC <= (others => '0');
+    elsif rising_edge(CLK) then -- At rising edge
+      if PC_INC = '1' then -- Increment signal - PC gets incremented
         PC <= PC + 1;
-      elsif PC_DEC = '1' then -- Signal na dekrementaciu - dekrementuje sa PC
+      elsif PC_DEC = '1' then -- Decrement signal - PC gets decremented
         PC <= PC - 1;
       end if;
     end if;
@@ -167,47 +177,37 @@ begin
   -- END PC
 
   -- MX1
-  process(CLK, MX1_SEL, PTR, PC)
+  process(MX1_SEL, PTR, PC)
   begin
-    if MX1_SEL = '0' then -- Ak je selektor na nule, tak cez MX1 prejde hodnota z PTR
+    if MX1_SEL = '0' then -- If the selector is zero, the value from PTR passes through MX1
       DATA_ADDR <= PTR;
-    else -- if MX1_SEL = '1' then Na selektore je jedna, cez MX1 prejde hodnota z PC
+    else -- If the selector is one, the value from PC passes through MX1
       DATA_ADDR <= PC;
     end if;
   end process;
   -- END MX1
 
   -- MX2
-  process(CLK, MX2_SEL, IN_DATA, TMP, DATA_RDATA)
+  process(MX2_SEL, IN_DATA, TMP, DATA_RDATA)
   begin
-    if MX2_SEL = "00" then -- Ak je selektor na nule, tak prejde TMP
+    if MX2_SEL = "00" then -- If the selector is zero, IN_DATA passes through MX2
       DATA_WDATA <= IN_DATA;
-    elsif MX2_SEL = "01" then -- Ak je selektor jedna, prejde TMP
+    elsif MX2_SEL = "01" then -- If the selector is one, TMP passes through MX2
       DATA_WDATA <= TMP;
-    elsif MX2_SEL = "10" then -- Ak je selektor jedna, prejde DATA_RDATA -1
+    elsif MX2_SEL = "10" then -- If the selector is two, DATA_RDATA - 1 passes through MX2
       DATA_WDATA <= DATA_RDATA - 1;
-    else -- if MX2_SEL = "11" then Ak je selektor dva, prejde DATA_RDATA + 1
+    else -- If the selector is three, DATA_RDATA + 1 passes through MX2
       DATA_WDATA <= DATA_RDATA + 1;
     end if;
   end process;
   -- END MX2
  
-  -- -- MX1
-  -- DATA_ADDR <= PTR when MX1_SEL = '0' else PC;
-  -- -- END MX1
-
-  -- -- MX2
-  -- DATA_WDATA <= IN_DATA when MX2_SEL = "00" else
-  --               TMP when MX2_SEL = "01" else
-  --               DATA_RDATA - 1 when MX2_SEL = "10" else
-  --               DATA_RDATA + 1;
-  
   -- IS_ZERO
   IS_ZERO <= '1' when CNT = 0 else '0';  -- Is zero logic
   -- END IS_ZERO
 
   -- DEC
-  DEC <= DATA_RDATA - 1; -- Decrement logic
+  -- DEC <= DATA_RDATA;  -- DEC is DATA_RDATA (decode)
   -- END DEC
 
   -- I/O
@@ -227,25 +227,19 @@ begin
   -- FSM END
 
   -- FSM LOGIC
-  process(state, DEC)
+  process(state, DATA_RDATA, IS_ZERO, EN, OUT_BUSY, IN_VLD)
   begin
-    --  next_state <= STATE_START;    
+    next_state <= STATE_START;    
 
     -- Initialize all the signals that fsm controls
-
-    -- CNT <= (others => '0');
     CNT_INC <= '0';
     CNT_DEC <= '0';
 
-    -- TMP <= (others => '0');
     TMP_LD <= '0';
 
-    -- PTR <= (others => '0');
     PTR_INC <= '0';
     PTR_DEC <= '0';
-    PTR_RST <= '0';
 
-    -- PC <= (others => '0');
     PC_INC <= '0';
     PC_DEC <= '0';
 
@@ -254,8 +248,6 @@ begin
 
     DATA_RDWR <= '0';
     DATA_EN <= '0';
-    -- READY <= '0';
-    -- DONE <= '0';
 
     IN_REQ <= '0';
     OUT_WE <= '0';
@@ -263,68 +255,161 @@ begin
 
     case state is
       when STATE_START => -- Start state PC ←0, PTR ←0, CNT ←0, READY ←0, DONE ←0
-        CNT <= (others => '0');
-        -- PTR <= (others => '0'); -- PTR_RST reset it to zeros
-        PC <= (others => '0');
 
-        PTR_RST <= '1';
         READY <= '0';
         DONE <= '0';
         next_state <= STATE_INIT; -- Go to init state
+
       when STATE_INIT => -- Init state PTR ←x + 1, READY ←1 (mem[x] = '@' nutne vymyslet
-        MX1_SEL <= '0';
+        MX1_SEL <= '0'; -- Set multiplexor PTR -> DATA_ADDR
         DATA_RDWR <= '1';
         DATA_EN <= '1';
-        if DEC + 1 = x"40" then -- When there is @ in the memory, its one less in DEC
+        next_state <= STATE_INIT_CMP;
+
+      WHEN STATE_INIT_CMP =>
+        if DATA_RDATA = x"40" then -- When there is @ in the memory
           READY <= '1';
           PTR_INC <= '1';
-          next_state <= STATE_RETURN;
+          next_state <= STATE_FETCH; -- Go to fetch instruction
         else
           PTR_INC <= '1';
           next_state <= STATE_INIT;
         end if; 
-      -- when STATE_FETCH =>
-      --     if EN = '1' then -- When fsm gets EN signal, fetch instruciton
-      --       MX1_SEL <= '1'; -- Set multiplexor PC - > DATA_ADDR
-      --       DATA_RDWR <= '1'; -- Read from memory
-      --       next_state <= STATE_DECODE; -- Go to decode instruction
-      --     else
-      --       next_state <= STATE_START; -- If there is no instruction go to start
-      --     end if;
-      -- when STATE_DECODE =>
-      --   case DATA_RDATA is -- DEC - 1 doesn't work, therefore i am using DATA_RDATA
-      --     when x"3E" =>
-      --       next_state <= STATE_INC_PTR; -- Increment pointer >
-      --     when x"3C" =>
-      --       next_state <= STATE_DEC_PTR; -- Decrement pointer <
-      --     when x"2B" =>
-      --       next_state <= STATE_INC_PTR_VAL; -- Increment pointer value +
-      --     when x"2D" =>
-      --       next_state <= STATE_DEC_PTR_VAL; -- Decrement pointer value -
-      --     when x"5B" =>
-      --       next_state <= STATE_CNT_START_WHILE; -- Start while [
-      --     when x"5D" =>
-      --       next_state <= STATE_CNT_END_WHILE; -- End while ]
-      --     when x"24" =>
-      --       next_state <= STATE_SAVE_PTR_TO_TMP; -- Save ptr to tmp $
-      --     when x"21" =>
-      --       next_state <= STATE_LOAD_TMP_TO_PTR; -- Load tmp to ptr !
-      --     when x"2E" =>
-      --       next_state <= STATE_PUTCHAR; -- Putchar .
-      --     when x"2C" =>
-      --       next_state <= STATE_GETCHAR; -- Getchar ,
-      --     when x"40" =>
-      --       next_state <= STATE_CODE_DIVIDER; -- Code divider @
-      --     when others =>
-      --       next_state <= STATE_NOP; -- No operation
-      --   end case;
-      -- when STATE_INC_PTR =>
-      --   PTR_INC <= '1';
-      --   PC_INC <= '1';
-      --   next_state <= STATE_FETCH; 
-      when STATE_RETURN =>
-        DONE <= '1';
-        next_state <= STATE_RETURN;
+
+      when STATE_FETCH =>
+          if EN = '1' then -- When fsm gets EN signal, fetch instruciton
+            MX1_SEL <= '1'; -- Set multiplexor PC - > DATA_ADDR
+            DATA_RDWR <= '1'; -- Read from memory
+            DATA_EN <= '1';
+            next_state <= STATE_DECODE; -- Go to decode instruction
+          else
+            next_state <= STATE_NOP; -- If there is no instruction go to start
+          end if;
+
+      when STATE_DECODE =>
+        case DATA_RDATA is -- Decode value
+          when x"3E" =>
+            next_state <= STATE_INC_PTR; -- Increment pointer >
+          when x"3C" =>
+            next_state <= STATE_DEC_PTR; -- Decrement pointer <
+          when x"2B" =>
+            next_state <= STATE_INC_PTR_VAL_READ; -- Increment pointer value +
+          when x"2D" =>
+            next_state <= STATE_DEC_PTR_VAL_READ; -- Decrement pointer value -
+          when x"5B" =>
+            next_state <= STATE_CNT_START_WHILE; -- Start while [
+          when x"5D" =>
+            next_state <= STATE_CNT_END_WHILE; -- End while ]
+          when x"24" =>
+            next_state <= STATE_SAVE_PTR_TO_TMP; -- Save ptr to tmp $
+          when x"21" =>
+            next_state <= STATE_LOAD_TMP_TO_PTR; -- Load tmp to ptr !
+          when x"2E" =>
+            next_state <= STATE_PUTCHAR; -- Putchar .
+          when x"2C" =>
+            next_state <= STATE_GETCHAR; -- Getchar ,
+          when x"40" =>
+            next_state <= STATE_CODE_DIVIDER; -- Code divider @
+          when others =>
+            next_state <= STATE_NOP; -- No operation
+        end case;
+
+      when STATE_INC_PTR =>
+        PTR_INC <= '1';
+        PC_INC <= '1';
+        next_state <= STATE_FETCH;
+
+      when STATE_DEC_PTR =>
+        PTR_DEC <= '1';
+        PC_INC <= '1';
+        next_state <= STATE_FETCH;
+
+      when STATE_INC_PTR_VAL_READ => -- Data from memory is on the line
+        MX1_SEL <= '0'; -- Set multiplexor PTR -> DATA_ADDR
+        DATA_RDWR <= '1'; -- Prepare to read from memory
+        DATA_EN <= '1';
+        PC_INC <= '1'; -- Increment PC
+        next_state <= STATE_INC_PTR_VAL_WRITE;
+
+      when STATE_INC_PTR_VAL_WRITE => -- Data from memory is still on the line and gets written
+        MX1_SEL <= '0'; -- Set multiplexor PTR -> DATA_ADDR
+        DATA_RDWR <= '0'; -- Prepare to write to memory
+        DATA_EN <= '1';
+        MX2_SEL <= "11"; -- Set multiplexor DATA_RDATA + 1
+        next_state <= STATE_FETCH;
+
+      when STATE_DEC_PTR_VAL_READ => -- Data from memory is on the line
+        MX1_SEL <= '0'; -- Set multiplexor PTR -> DATA_ADDR
+        DATA_RDWR <= '1'; -- Prepare to read from memory
+        DATA_EN <= '1';
+        PC_INC <= '1'; -- Increment PC
+        next_state <= STATE_DEC_PTR_VAL_WRITE;
+
+      when STATE_DEC_PTR_VAL_WRITE => -- Data from memory is still on the line and gets written
+        MX1_SEL <= '0'; -- Set multiplexor PTR -> DATA_ADDR
+        DATA_RDWR <= '0'; -- Prepare to write to memory
+        DATA_EN <= '1';
+        MX2_SEL <= "10"; -- Set multiplexor DATA_RDATA - 1
+        next_state <= STATE_FETCH;
+     
+      when STATE_PUTCHAR => -- Putchar
+        MX1_SEL <= '0'; -- Set multiplexor PTR -> DATA_ADDR
+        PC_INC <= '1'; -- Increment PC
+        DATA_RDWR <= '1'; -- Prepare to read from memory
+        DATA_EN <= '1';
+        next_state <= STATE_PUTCHAR_PRINT;
+
+      when STATE_PUTCHAR_PRINT => -- Putchar print
+        if OUT_BUSY = '0' then -- If output is not busy
+          OUT_WE <= '1'; -- Enable output
+          OUT_DATA <= DATA_RDATA; -- Write data to output
+          next_state <= STATE_FETCH;
+        else
+          next_state <= STATE_PUTCHAR_PRINT;
+        end if;
+
+      when STATE_GETCHAR => -- Getchar
+        IN_REQ <= '1'; -- Enable input
+        if IN_VLD = '1' then -- Input valid, can read
+          next_state <= STATE_GETCHAR_READ;
+        else
+          next_state <= STATE_GETCHAR;
+        end if;
+
+      when STATE_GETCHAR_READ => -- Getchar read
+        MX1_SEL <= '0'; -- Set multiplexor PTR -> DATA_ADDR
+        MX2_SEL <= "00"; -- Set multiplexor IN_DATA -> DATA_WDATA
+        DATA_RDWR <= '0'; -- Prepare to write to memory
+        DATA_EN <= '1';
+        PC_INC <= '1'; -- Increment PC
+        next_state <= STATE_FETCH;
+        
+      when STATE_SAVE_PTR_TO_TMP => -- Save ptr to tmp
+        MX1_SEL <= '0'; -- Set multiplexor PTR -> DATA_ADDR
+        DATA_RDWR <= '1'; -- Prepare to read from memory
+        DATA_EN <= '1';
+        PC_INC <= '1'; -- Increment PC
+        next_state <= STATE_SAVE_PTR_TO_TMP_WRITE;
+      when STATE_SAVE_PTR_TO_TMP_WRITE =>
+        TMP_LD <= '1'; -- Load TMP
+        next_state <= STATE_FETCH;
+
+      when STATE_LOAD_TMP_TO_PTR => -- Load tmp to ptr
+        MX1_SEL <= '0'; -- Set multiplexor PTR -> DATA_ADDR
+        MX2_SEL <= "01"; -- Set multiplexor TMP -> DATA_WDATA
+        DATA_RDWR <= '0'; -- Prepare to write to memory
+        DATA_EN <= '1';
+        PC_INC <= '1'; -- Increment PC
+        next_state <= STATE_FETCH;
+
+      when STATE_CODE_DIVIDER => -- Code divider
+        DONE <= '1'; -- Done
+        next_state <= STATE_CODE_DIVIDER;
+
+      when STATE_NOP => -- No operation
+        PC_INC <= '1'; -- Increment PC
+        next_state <= STATE_FETCH;
+
       when others => null;
     end case;
   end process;
