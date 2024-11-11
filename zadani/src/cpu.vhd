@@ -86,7 +86,6 @@ architecture behavioral of cpu is
     STATE_PTR_INIT,
     STATE_FETCH,  
     STATE_DECODE,
-    STATE_NEXT,
     STATE_INC_PTR,          -- > 0x3E
     STATE_DEC_PTR,          -- < 0x3C
     STATE_INC_PTR_VAL_READ, -- + 0x2B
@@ -257,7 +256,6 @@ begin
 
     case state is
       when STATE_START => -- Start state PC ←0, PTR ←0, CNT ←0, READY ←0, DONE ←0
-
         READY <= '0';
         DONE <= '0';
         next_state <= STATE_INIT; -- Go to init state
@@ -316,12 +314,12 @@ begin
             next_state <= STATE_NOP; -- No operation
         end case;
 
-      when STATE_INC_PTR =>
+      when STATE_INC_PTR => -- Increment pointer and moves to the next instruction
         PTR_INC <= '1';
         PC_INC <= '1';
         next_state <= STATE_FETCH;
 
-      when STATE_DEC_PTR =>
+      when STATE_DEC_PTR => -- Decrements pointer and moves to the next instruction
         PTR_DEC <= '1';
         PC_INC <= '1';
         next_state <= STATE_FETCH;
@@ -392,6 +390,7 @@ begin
         DATA_EN <= '1';
         PC_INC <= '1'; -- Increment PC
         next_state <= STATE_SAVE_PTR_TO_TMP_WRITE;
+        
       when STATE_SAVE_PTR_TO_TMP_WRITE =>
         TMP_LD <= '1'; -- Load TMP
         next_state <= STATE_FETCH;
@@ -404,13 +403,13 @@ begin
         PC_INC <= '1'; -- Increment PC
         next_state <= STATE_FETCH;
 
-      when STATE_START_WHILE =>
+      when STATE_START_WHILE => -- Prepares multiplexor and memory to check if it should go to the loop
         MX1_SEL <= '0'; -- Set multiplexor PTR -> DATA_ADDR
         DATA_RDWR <= '1'; -- Prepare to read from memory
         DATA_EN <= '1';
         next_state <= STATE_START_WHILE_CMP;
 
-      when STATE_START_WHILE_CMP =>
+      when STATE_START_WHILE_CMP => -- Checks if it should go to the loop, if not, finds the end and goes there
         if DEC = x"00" then -- Go to the end if PTR is zero
           next_state <= STATE_START_FIND_END;
         else
@@ -418,13 +417,13 @@ begin
           next_state <= STATE_FETCH;
         end if;
 
-      when STATE_START_FIND_END =>
+      when STATE_START_FIND_END => -- If loop condition it not met, find the end of the loop
         MX1_SEL <= '1'; -- Set multiplexor PC -> DATA_ADDR
         DATA_RDWR <= '1'; -- Prepare to read from memory
         DATA_EN <= '1';
         next_state <= STATE_START_FIND_END_CMP;
         
-      when STATE_START_FIND_END_CMP =>
+      when STATE_START_FIND_END_CMP => -- Loops until it find end of the loop
         if DEC = x"5D" then -- If the end is found
           PC_INC <= '1'; -- Increment PC
           next_state <= STATE_FETCH;
@@ -433,13 +432,13 @@ begin
           next_state <= STATE_START_FIND_END;
         end if;
 
-      when STATE_END_WHILE =>
+      when STATE_END_WHILE => -- If it gets to the end of the loop, it goes back to the start
         MX1_SEL <= '1'; -- Set multiplexor PC -> DATA_ADDR
         DATA_RDWR <= '1'; -- Prepare to read from memory
         DATA_EN <= '1';
         next_state <= STATE_END_FIND_START;
 
-      when STATE_END_FIND_START =>
+      when STATE_END_FIND_START => -- Loops until it finds the start
         if DEC = x"5B" then -- If the start is found
           next_state <= STATE_FETCH;
         else
